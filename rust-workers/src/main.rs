@@ -11,10 +11,13 @@ async fn process_task(task: web::Json<Task>) -> impl Responder {
     println!("Processing file: {}", task.file);
     // Add logic to handle the file (e.g., processing image)
 
+    if task.file.is_empty(){
+    return web::HttpResponse::BadRequest()>body("File name is missing!");
+    }
     // Simulate processing time
     std::thread::sleep(std::time::Duration::from_secs(2));
 
-    format!("Processed file: {}", task.file)
+    web::HttpResponse::oK().body(format!("Processed file: {}", task.file))
 }
 
 #[actix_web::main]
