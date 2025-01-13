@@ -97,22 +97,30 @@ func StartWorker() {
 
 // ProcessTask sends the task to the Rust worker node
 func ProcessTask(task Task) {
-	// Prepare the payload as JSON
-	payload, err := json.Marshal(task)
-	if err != nil {
-		log.Printf("Error marshaling task: %v", err)
-		return
-	}
+    for retries := 0; retries < 3; retries++ {
+    	// Prepare the payload as JSON
 
-	resp, err := http.Post(WorkerURL, "application/json", bytes.NewBuffer(payload))
-	if err != nil {
-		log.Printf("Error sending task to worker: %v", err)
-		return
-	}
-	defer resp.Body.Close()
+        payload, err := json.Marshal(task)
+        if err != nil {
+            log.Printf("Error marshaling task: %v", err)
+            return
+        }
 
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("Worker failed to process task: %s", task.ID)
-	}
-	log.Printf("Task %s processed successfully", task.ID)
+        resp, err := http.Post(WorkerURL, "application/json", bytes.NewBuffer(payload))
+        if err != nil {
+            log.Printf("Error sending task to worker: %v", err)
+            continue // Retry logic
+        }
+        defer resp.Body.Close() // Ensures the response body is always closed
+
+        if resp.StatusCode == http.StatusOK {
+            log.Printf("Task %s processed successfully", task.ID)
+            return
+        }
+
+        log.Printf("Retrying task %s (%d/3)", task.ID, retries+1)
+        time.Sleep(2 * time.Second)
+    }
+
+    log.Printf("Task %s failed after retries", task.ID)
 }
