@@ -17,20 +17,22 @@ async fn process_task(task: web::Json<Task>) -> impl Responder {
 
     println!("Processing file: {}", task.file);
 
-    let file_name = task.file.clone();
-    let task = Arc::new(task);
+    //let task = Arc::new(task);
+     let task = Arc::new(task.into_inner());
+     let id = task.id.clone();
+     let file = task.file.clone();
     // Add logic to handle the file (e.g., processing image)
 
     task::spawn(async move {
-            println!("Processing file: {}", file_name);
-
+        println!("Processing file: {} (ID: {})", file, id);
             // Simulate file processing (e.g., image resizing)
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-            println!("Completed processing file: {}", file_name);
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        println!("Completed processing file: {} (ID: {})", file, id);
         });
 
-        web::HttpResponse::Ok().body(format!("Processing started for file: {}", task.file))
+    HttpResponse::Ok().body(format!("Task {} is being processed", id))
+
+        //web::HttpResponse::Ok().body(format!("Processing started for file: {}", task.file))
     // Simulate processing time
     //std::thread::sleep(std::time::Duration::from_secs(2));
 
