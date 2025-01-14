@@ -10,6 +10,10 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"context"
+	"sync"
+    "syscall"
+    "os/signal"
 
 	"github.com/gorilla/mux"
 )
@@ -32,10 +36,40 @@ func main() {
 	// Define the endpoint to accept tasks
 	router.HandleFunc("/tasks", CreateTaskHandler).Methods("POST")
 
-	go StartWorker()
+	//go StartWorker()
+
+	// Context for graceful shutdown
+    ctx, cancel := context.WithCancel(context.Background())
+    var wg sync.WaitGroup
+
+    wg.Add(1)
+    go func() {
+        defer wg.Done()
+    	StartWorker(ctx)
+    }()
+
+
+	server := &http.Server{Addr: ":8080", Handler: router}
+
+	// Handle OS signals for graceful shutdown
+	go func() {
+		stop := make(chan os.Signal, 1)
+		signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+		<-stop
+		log.Println("Shutting down server...")
+		cancel()          // Cancel worker context
+		server.Close()    // Stop the HTTP server
+	}()
 
 	log.Println("Starting server on :8080")
-	log.Fatal(http.ListenAndServe(":8080", router))
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+    		log.Fatalf("Server error: %v", err)
+    }
+
+    wg.Wait() // Wait for all goroutines to finish
+    log.Println("Server stopped gracefully.")
+
+	//log.Fatal(http.ListenAndServe(":8080", router))
 }
 
 // CreateTaskHandler handles incoming tasks
@@ -123,4 +157,16 @@ func ProcessTask(task Task) {
     }
 
     log.Printf("Task %s failed after retries", task.ID)
+}
+
+func StartWorker(ctx context.Context) {
+	for {
+		select {
+		case task := <-TaskQueue:
+			ProcessTask(task)
+		case <-ctx.Done():
+			log.Println("Worker stopped")
+			return
+		}
+	}
 }
