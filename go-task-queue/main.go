@@ -30,11 +30,17 @@ var TaskQueue = make(chan Task, 100)
 // WorkerURL is the URL of the Rust worker nodes
 const WorkerURL = "http://localhost:8081/process"
 
+
+var TaskStatus = sync.Map{}
+
 func main() {
 	router := mux.NewRouter()
 
 	// Define the endpoint to accept tasks
 	router.HandleFunc("/tasks", CreateTaskHandler).Methods("POST")
+
+    router.HandleFunc("/status", TaskStatusHandler).Methods("GET")
+	router.HandleFunc("/health", HealthCheckHandler).Methods("GET")
 
 	//go StartWorker()
 
@@ -97,6 +103,7 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to create temp file", http.StatusInternalServerError)
 		return
 	}
+
 	defer os.Remove(tempFile.Name())
 
 	// Write the file to the temporary location
@@ -114,9 +121,25 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	// Send the task to the queue
 	TaskQueue <- task
 
+	TaskStatus.Store(task.ID, "queued")
+
 	// Respond to the client
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(task)
+}
+
+func TaskStatusHandler(w http.ResponseWriter, r *http.Request) {
+	taskID := r.URL.Query().Get("id")
+	if status, ok := TaskStatus.Load(taskID); ok {
+		json.NewEncoder(w).Encode(map[string]string{"status": status.(string)})
+	} else {
+		http.Error(w, "Task not found", http.StatusNotFound)
+	}
+}
+
+func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
 
 // StartWorker starts a worker that processes tasks
@@ -124,7 +147,12 @@ func StartWorker() {
 	for {
 		select {
 		case task := <-TaskQueue:
+			TaskStatus.Store(task.ID, "processing")
 			ProcessTask(task)
+			TaskStatus.Store(task.ID, "completed")
+		case <-ctx.Done():
+			log.Println("Worker stopped")
+			return
 		}
 	}
 }
@@ -159,14 +187,3 @@ func ProcessTask(task Task) {
     log.Printf("Task %s failed after retries", task.ID)
 }
 
-func StartWorker(ctx context.Context) {
-	for {
-		select {
-		case task := <-TaskQueue:
-			ProcessTask(task)
-		case <-ctx.Done():
-			log.Println("Worker stopped")
-			return
-		}
-	}
-}

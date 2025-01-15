@@ -11,6 +11,8 @@ This project is a distributed task processing system consisting of:
 ## Features
 - Graceful shutdown.
 - Task status tracking.
+- Health checks for monitoring.
+- Retry logic for task processing.
 
 ## Requirements
 - Go 1.20+
