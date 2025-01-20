@@ -48,10 +48,12 @@ async fn health_check() -> impl Responder{
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let bind_address = std::env::var("BIND_ADDRESS").unwrap_or_else(|_| "127.0.0.1:8081".to_string());
+
     HttpServer::new(|| {
         App::new().service(process_task)
     })
-    .bind("127.0.0.1:8081")?
+    .bind(&bind_address)?
     .run()
     .await
 }
