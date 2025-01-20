@@ -12,8 +12,8 @@ import (
 	"time"
 	"context"
 	"sync"
-    "syscall"
-    "os/signal"
+	"syscall"
+	"os/signal"
 
 	"github.com/gorilla/mux"
 )
@@ -104,7 +104,8 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer os.Remove(tempFile.Name())
+    defer tempFile.Close() //closing instead of directly removing
+	//defer os.Remove(tempFile.Name())
 
 	// Write the file to the temporary location
 	if _, err := io.Copy(tempFile, file); err != nil {
@@ -138,12 +139,20 @@ func TaskStatusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
+
+   //Check contecivity with the worker
+   resp, err := http.Get(WorkerURL)
+   if err != nil || resp.StatusCode != http.StatusOK {
+            http.Error(w, "worker unreachable",
+            http.StatusInternalServerError)
+            return
+   }
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
 
 // StartWorker starts a worker that processes tasks
-func StartWorker() {
+func StartWorker(ctx context.Context) {
 	for {
 		select {
 		case task := <-TaskQueue:
@@ -183,7 +192,8 @@ func ProcessTask(task Task) {
         log.Printf("Retrying task %s (%d/3)", task.ID, retries+1)
         time.Sleep(2 * time.Second)
     }
-
     log.Printf("Task %s failed after retries", task.ID)
+
+    TaskStatus.Store(task.ID ,"failed")
 }
 

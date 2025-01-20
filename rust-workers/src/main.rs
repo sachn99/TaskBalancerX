@@ -5,6 +5,7 @@ use tokio::task;
 
 #[derive(Deserialize)]
 struct Task {
+    id: String,
     file: String,
 }
 
@@ -38,6 +39,12 @@ async fn process_task(task: web::Json<Task>) -> impl Responder {
 
     //web::HttpResponse::oK().body(format!("Processed file: {}", task.file))
 }
+
+#[get("/health")]
+async fn health_check() -> impl Responder{
+    HttpResponse::ok().body("OK")
+}
+
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
